@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AI Investment Intelligence Platform
 
 Phase 1 establishes a stable local development foundation for a future stock-market
@@ -152,3 +153,6 @@ PostgreSQL/Compose: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
 The next planned phase may establish the first explicitly approved domain capability and its data
 contracts. No Phase 2 functionality is present in this repository.
 
+=======
+# investment-intelligence-platform
+>>>>>>> origin/main
