@@ -7,5 +7,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],
   },
-  resolve: { alias: { "@": new URL("./src", import.meta.url).pathname } },
+  resolve: {
+    preserveSymlinks: true,
+    alias: { "@": new URL("./src", import.meta.url).pathname },
+  },
 });
