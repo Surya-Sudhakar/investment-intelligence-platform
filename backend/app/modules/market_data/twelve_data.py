@@ -14,6 +14,13 @@ from app.core.exceptions import (
     ProviderRateLimitError,
     SymbolNotFoundError,
 )
+from app.modules.assets.schemas import (
+    AssetResolution,
+    AssetType,
+    EtfProfile,
+    ProviderAssetData,
+    StockProfile,
+)
 from app.modules.market_data.http_client import MarketDataHttpClient
 from app.modules.market_data.schemas import (
     Candle,
@@ -132,6 +139,67 @@ class TwelveDataProvider:
             provider=self.name,
             provider_symbol=provider_symbol,
             timezone=str(item.get("timezone") or "") or None,
+        )
+
+    async def resolve_asset(self, symbol: str) -> AssetResolution:
+        canonical = symbol.replace("/", "").replace("-", "").upper()
+        if canonical == "XAUUSD":
+            return AssetResolution(
+                symbol="XAUUSD",
+                provider_symbol="XAU/USD",
+                display_name="Gold Spot / US Dollar",
+                asset_type=AssetType.GOLD,
+                currency="USD",
+            )
+        payload = await self._request("symbol_search", symbol=symbol, outputsize="20")
+        data = payload.get("data")
+        if not isinstance(data, list):
+            raise ProviderInvalidResponseError()
+        for item in data:
+            if not isinstance(item, dict) or str(item.get("symbol", "")).upper() != symbol:
+                continue
+            raw_type = str(item.get("instrument_type", "")).casefold()
+            if "etf" in raw_type or "fund" in raw_type:
+                asset_type = AssetType.ETF
+            elif raw_type in {"common stock", "stock", "equity"}:
+                asset_type = AssetType.STOCK
+            else:
+                asset_type = AssetType.UNKNOWN
+            return AssetResolution(
+                symbol=symbol,
+                provider_symbol=str(item.get("symbol", symbol)).upper(),
+                display_name=str(item.get("instrument_name") or symbol),
+                asset_type=asset_type,
+                exchange=str(item.get("exchange") or "") or None,
+                currency=str(item.get("currency") or "") or None,
+            )
+        raise SymbolNotFoundError(symbol)
+
+    async def get_asset_data(self, resolution: AssetResolution) -> ProviderAssetData:
+        if resolution.asset_type is AssetType.GOLD:
+            return ProviderAssetData(resolution=resolution)
+        if resolution.asset_type is AssetType.ETF:
+            return ProviderAssetData(
+                resolution=resolution,
+                etf_profile=EtfProfile(fund_name=resolution.display_name),
+                warnings=[
+                    "The configured Twelve Data plan did not provide normalized ETF holdings "
+                    "or allocation data."
+                ],
+            )
+        payload = await self._request("stocks", symbol=resolution.provider_symbol)
+        data = payload.get("data")
+        item = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else {}
+        return ProviderAssetData(
+            resolution=resolution,
+            stock_profile=StockProfile(
+                company_name=str(item.get("name") or resolution.display_name),
+                country=str(item.get("country") or "") or None,
+            ),
+            warnings=[
+                "Detailed company fundamentals are unavailable from the configured provider "
+                "capabilities."
+            ],
         )
 
     async def get_candles(

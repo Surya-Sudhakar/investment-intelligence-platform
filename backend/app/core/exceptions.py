@@ -66,6 +66,16 @@ class InvalidSymbolError(MarketDataError):
         super().__init__("INVALID_SYMBOL", "The stock symbol is invalid.", 422)
 
 
+class UnsupportedAssetError(MarketDataError):
+    def __init__(self, symbol: str) -> None:
+        super().__init__(
+            "UNSUPPORTED_ASSET",
+            f"The asset type for {symbol} could not be identified or is not supported.",
+            422,
+            {"symbol": symbol, "supported_asset_types": ["STOCK", "GOLD", "ETF"]},
+        )
+
+
 class UnsupportedIntervalError(MarketDataError):
     def __init__(self, interval: str) -> None:
         super().__init__("UNSUPPORTED_INTERVAL", f"Interval {interval} is not supported.", 422)

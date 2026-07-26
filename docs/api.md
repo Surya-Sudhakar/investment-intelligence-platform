@@ -18,6 +18,7 @@ Known errors use the standard `error` envelope and include a request ID.
 | GET | `/api/v1/intelligence/{symbol}` | `IntelligenceSnapshot` |
 | GET | `/api/v1/assessments/health` | `AssessmentHealth` |
 | GET | `/api/v1/assessments/{symbol}?interval=1day` | `TechnicalAssessment` |
+| GET | `/api/v1/assets/{symbol}/intelligence` | `AssetIntelligenceResponse` |
 
 ## Daily technical assessment
 
@@ -51,3 +52,12 @@ Clients may supply `X-Request-ID`; the backend exposes it on the response. Examp
   }
 }
 ```
+
+## Asset intelligence
+
+`GET /api/v1/assets/{symbol}/intelligence` identifies the asset in the backend and returns the
+common Phase 5 envelope with asset-specific `profile`, `metrics`, optional stock
+`classification`, `warnings`, and `availability`. Public gold requests use `XAUUSD`.
+
+Partial and stale results use HTTP 200 with explicit warnings. Unknown provider instrument
+types return the standardized `UNSUPPORTED_ASSET` response.

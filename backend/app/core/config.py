@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     market_data_symbol_cache_ttl_seconds: int = 3600
     market_data_candle_cache_ttl_seconds: int = 300
     market_data_quote_cache_ttl_seconds: int = 15
+    asset_classification_cache_ttl_seconds: int = 86400
+    asset_profile_cache_ttl_seconds: int = 86400
+    asset_fundamentals_cache_ttl_seconds: int = 21600
     market_data_default_candle_limit: int = 100
     market_data_max_candle_limit: int = 500
     intelligence_poll_interval_seconds: float = 30.0
@@ -59,6 +62,12 @@ class Settings(BaseSettings):
             raise ValueError("Intelligence live threshold must be lower than stale threshold")
         if self.intelligence_poll_interval_seconds <= 0:
             raise ValueError("INTELLIGENCE_POLL_INTERVAL_SECONDS must be positive")
+        if min(
+            self.asset_classification_cache_ttl_seconds,
+            self.asset_profile_cache_ttl_seconds,
+            self.asset_fundamentals_cache_ttl_seconds,
+        ) <= 0:
+            raise ValueError("Asset cache TTL values must be positive")
         return self
 
 

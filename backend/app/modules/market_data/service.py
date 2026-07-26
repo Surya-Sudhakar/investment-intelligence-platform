@@ -17,7 +17,7 @@ from app.modules.market_data.schemas import (
     SymbolSearchResult,
 )
 
-SYMBOL_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,19}$")
+SYMBOL_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9./\-]{0,19}$")
 
 
 class MarketDataService:

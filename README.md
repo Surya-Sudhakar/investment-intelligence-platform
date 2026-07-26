@@ -12,8 +12,8 @@ recommendations.
 
 ## Current development status
 
-Phases 1, 2, 3, and 4A are implemented. The application currently supports stocks through a
-provider-neutral market-data layer. Twelve Data is the configured default provider, while Alpha
+Phases 1, 2, 3, 4A, and 5 are implemented. The application supports provider-neutral stock,
+gold, and ETF asset intelligence. Twelve Data is the configured default provider, while Alpha
 Vantage remains available as an alternative adapter.
 
 ### Phase 1 — Foundation
@@ -58,6 +58,18 @@ Vantage remains available as an alternative adapter.
 - Immutable, versioned `technical-v1` configuration
 - Phase 4A frontend dashboard
 
+### Phase 5 — Asset Intelligence
+
+- Backend identification of `STOCK`, `GOLD`, `ETF`, and `UNKNOWN`
+- Provider-neutral company, commodity, and fund profiles
+- Versioned deterministic `fundamentals-v1` stock condition labels
+- Partial-data, availability, warning, and freshness information
+- Gold observations without fabricated company fundamentals
+- Optional ETF holdings and allocations when supported
+
+Phase 5 does not combine fundamentals with the Phase 4A technical score. See
+[docs/asset-intelligence.md](docs/asset-intelligence.md).
+
 The public assessment endpoint supports only `interval=1day`. `AssessmentService` calls
 `IntelligenceService.snapshot()` once per request. It has no direct provider dependency and does
 not persist assessments to PostgreSQL.
@@ -89,6 +101,7 @@ backend/
   app/modules/market_data/       Provider adapters, normalized schemas, cache, and service
   app/modules/intelligence/      Indicators, classifications, polling, and snapshots
   app/modules/assessments/       technical-v1 configuration, scoring, schemas, and service
+  app/modules/assets/            Asset classification, profiles, and fundamentals
   migrations/                    Alembic migrations
   tests/unit/                    Backend unit tests
   tests/integration/             Backend API and migration tests
@@ -197,6 +210,7 @@ key in one of those variables.
 | GET | `/api/v1/intelligence/AAPL` | Daily Phase 3 intelligence snapshot |
 | GET | `/api/v1/assessments/health` | Assessment input readiness and scoring version |
 | GET | `/api/v1/assessments/AAPL?interval=1day` | Daily technical assessment |
+| GET | `/api/v1/assets/AAPL/intelligence` | Stock, gold, or ETF asset intelligence |
 
 Errors use the standard envelope:
 

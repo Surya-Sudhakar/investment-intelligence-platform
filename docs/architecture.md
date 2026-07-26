@@ -85,3 +85,7 @@ Phase 2 adds the first cohesive module at `app/modules/market_data`. See
 [`market-data.md`](market-data.md) for its provider-neutral contracts, request flow, validation,
 error mapping and caching decisions. See [`intelligence.md`](intelligence.md) and
 [`technical-assessments.md`](technical-assessments.md) for the Phase 3 and Phase 4A contracts.
+Phase 5 adds `app/modules/assets`. `AssetIntelligenceService` depends on the separate
+`AssetDataProvider` protocol and reuses the configured adapter, `TTLCache`, `MarketDataService`,
+and `IntelligenceService`. It has no dependency on `AssessmentService`, and Phase 4A scoring
+does not consume Phase 5 fundamentals.
