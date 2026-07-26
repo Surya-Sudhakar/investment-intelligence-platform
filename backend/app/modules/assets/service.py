@@ -47,9 +47,7 @@ class AssetIntelligenceService:
         if isinstance(cached, AssetResolution):
             return cached
         resolution = await self.provider.resolve_asset(symbol)
-        await self.cache.set(
-            key, resolution, self.settings.asset_classification_cache_ttl_seconds
-        )
+        await self.cache.set(key, resolution, self.settings.asset_classification_cache_ttl_seconds)
         return resolution
 
     async def _provider_data(self, resolution: AssetResolution) -> ProviderAssetData:
@@ -169,8 +167,7 @@ class AssetIntelligenceService:
                 allocations=bool(
                     data.etf_metrics
                     and (
-                        data.etf_metrics.sector_allocation
-                        or data.etf_metrics.geographic_allocation
+                        data.etf_metrics.sector_allocation or data.etf_metrics.geographic_allocation
                     )
                 ),
                 technical_snapshot=technical_available,

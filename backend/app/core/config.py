@@ -62,11 +62,14 @@ class Settings(BaseSettings):
             raise ValueError("Intelligence live threshold must be lower than stale threshold")
         if self.intelligence_poll_interval_seconds <= 0:
             raise ValueError("INTELLIGENCE_POLL_INTERVAL_SECONDS must be positive")
-        if min(
-            self.asset_classification_cache_ttl_seconds,
-            self.asset_profile_cache_ttl_seconds,
-            self.asset_fundamentals_cache_ttl_seconds,
-        ) <= 0:
+        if (
+            min(
+                self.asset_classification_cache_ttl_seconds,
+                self.asset_profile_cache_ttl_seconds,
+                self.asset_fundamentals_cache_ttl_seconds,
+            )
+            <= 0
+        ):
             raise ValueError("Asset cache TTL values must be positive")
         return self
 

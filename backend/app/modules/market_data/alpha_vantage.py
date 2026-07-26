@@ -188,9 +188,7 @@ class AlphaVantageProvider:
             parsed_timestamp = None
             if timestamp:
                 try:
-                    parsed_timestamp = datetime.fromisoformat(
-                        str(timestamp).replace("Z", "+00:00")
-                    )
+                    parsed_timestamp = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
                 except ValueError:
                     parsed_timestamp = None
             return ProviderAssetData(
@@ -206,8 +204,7 @@ class AlphaVantageProvider:
                 source_timestamp=parsed_timestamp,
                 warnings=[]
                 if any(
-                    payload.get(key) is not None
-                    for key in ("price", "spot_price", "ask", "bid")
+                    payload.get(key) is not None for key in ("price", "spot_price", "ask", "bid")
                 )
                 else ["The gold provider response did not include a normalized spot price."],
             )
