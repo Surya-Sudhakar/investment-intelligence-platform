@@ -1,154 +1,335 @@
 # AI Investment Intelligence Platform
 
-Phase 1 establishes a stable local development foundation for a future stock-market
-decision-support application. It is not a broker, automated trading system, leveraged trading
-system, or guaranteed prediction system.
+## Project overview
 
-## Scope
+This repository contains a modular investment-intelligence application built with FastAPI,
+Next.js, PostgreSQL, and Docker Compose. It normalizes market data, derives deterministic
+technical intelligence, and produces an explainable daily technical assessment.
 
-Included: FastAPI, Next.js, PostgreSQL, SQLAlchemy, Alembic, typed environment configuration,
-structured logs, safe errors, request IDs, health/readiness checks, a development status page,
-tests, Docker Compose, and CI.
+This is a deterministic technical decision-support platform. It is not a broker, an automated
+trading system, or a guaranteed prediction system. Technical assessments are not investment
+recommendations.
 
-Deliberately absent: market data, indicators, recommendations, trade setups, position sizing,
-authentication, portfolios, watchlists, practice trades, polished dashboards, Redis, queues,
-microservices, and cloud infrastructure.
+## Current development status
 
-## Stack and prerequisites
+Phases 1, 2, 3, and 4A are implemented. The application currently supports stocks through a
+provider-neutral market-data layer. Twelve Data is the configured default provider, while Alpha
+Vantage remains available as an alternative adapter.
 
-- Python 3.12+
-- Node.js 22+ and npm
-- Docker Engine with Docker Compose (recommended)
-- PostgreSQL 17 for non-Docker development
+### Phase 1 — Foundation
 
-## Repository
+- FastAPI backend and Next.js frontend
+- PostgreSQL, SQLAlchemy, and Alembic
+- Docker Compose local environment
+- Health and readiness endpoints
+- Typed environment configuration
+- Structured logging, request IDs, safe errors, and CORS
+- Backend and frontend testing infrastructure
+
+### Phase 2 — Market Data
+
+- Provider-neutral `MarketDataProvider` contract
+- Twelve Data and Alpha Vantage adapters
+- Normalized symbol search, symbol details, quotes, and candles
+- Supported market-data intervals: `5min`, `15min`, `1h`, and `1day`
+- Provider capabilities and health reporting
+- Timeout, bounded retry, validation, error mapping, and in-process TTL caching
+
+### Phase 3 — Market Intelligence
+
+- Freshness and exchange-status classification
+- UTC candle aggregation and asynchronous quote polling support
+- EMA20, EMA50, RSI14, ATR14, average volume, and 52-week range
+- Previous close, daily change, and opening gap
+- Trend, momentum, and volatility classifications
+- Support, resistance, distance-to-level, and breakout-proximity observations
+- Normalized `IntelligenceSnapshot` output and frontend dashboard
+
+### Phase 4A — Technical Decision Support
+
+- Daily-only deterministic technical assessments
+- Five technical-outlook classifications
+- Technical score from 0 to 100
+- Separate confidence score from 0 to 100
+- Independent risk score and risk level
+- Component scoring breakdown and structured explanations
+- Supporting, conflicting, risk, and missing-data factors
+- Data-quality metadata and snapshot/generation timestamps
+- Immutable, versioned `technical-v1` configuration
+- Phase 4A frontend dashboard
+
+The public assessment endpoint supports only `interval=1day`. `AssessmentService` calls
+`IntelligenceService.snapshot()` once per request. It has no direct provider dependency and does
+not persist assessments to PostgreSQL.
+
+## Architecture overview
 
 ```text
-backend/             FastAPI application, Alembic, and Python tests
-frontend/            Next.js application and component tests
-infrastructure/      infrastructure scope notes
-docs/architecture.md architecture decisions and flows
-scripts/             PowerShell quality-command wrappers
-.github/workflows/   continuous integration
-docker-compose.yml   local three-service environment
+Next.js frontend
+  → FastAPI Assessment API
+  → AssessmentService
+  → IntelligenceService
+  → MarketDataService / in-process cache
+  → Twelve Data or the configured provider
 ```
 
-## Docker setup
+The backend is a modular monolith. API routes remain thin, while provider integration,
+intelligence generation, and assessment scoring live in separate modules. See
+[docs/architecture.md](docs/architecture.md), [docs/market-data.md](docs/market-data.md),
+[docs/intelligence.md](docs/intelligence.md), and
+[docs/technical-assessments.md](docs/technical-assessments.md).
 
-```bash
-cp .env.example .env
+## Repository structure
+
+```text
+backend/
+  app/api/v1/routes/             FastAPI route modules
+  app/core/                      Configuration, logging, and application errors
+  app/db/                        SQLAlchemy session and models
+  app/modules/market_data/       Provider adapters, normalized schemas, cache, and service
+  app/modules/intelligence/      Indicators, classifications, polling, and snapshots
+  app/modules/assessments/       technical-v1 configuration, scoring, schemas, and service
+  migrations/                    Alembic migrations
+  tests/unit/                    Backend unit tests
+  tests/integration/             Backend API and migration tests
+
+frontend/
+  src/app/                       Next.js App Router entry points
+  src/components/                Status, market-data, intelligence, and assessment screens
+  src/hooks/                     React Query hooks
+  src/lib/api/                   Typed API clients and response types
+  src/lib/config/                Public environment validation
+  tests/                         Vitest and Testing Library tests
+
+docs/                            Architecture and capability documentation
+scripts/                         PowerShell quality-command helpers
+.github/workflows/               Continuous integration
+docker-compose.yml               Local application services
+```
+
+## Local Docker setup
+
+Prerequisites are Docker Desktop with Compose and available ports 3000 and 8000.
+
+```powershell
+Copy-Item .env.example .env
+# Put the real provider key only in .env.
 docker compose up --build -d postgres
 docker compose run --rm backend alembic upgrade head
-docker compose up --build
+docker compose up --build -d backend frontend
+docker compose ps
 ```
 
-Open `http://localhost:3000`. The API is at `http://localhost:8000`.
+Open [http://localhost:3000](http://localhost:3000). The API is available at
+`http://localhost:8000`, and interactive API documentation is at
+`http://localhost:8000/docs`.
 
-```bash
-docker compose logs -f
+PostgreSQL is intentionally not published on a host port. The frontend image does not use a
+Windows source bind mount, so rebuild it after frontend source changes.
+
+Useful commands:
+
+```powershell
+docker compose logs -f backend frontend
 docker compose exec backend pytest
-docker compose exec backend alembic current
 docker compose down
 ```
-
-To reset only the disposable development database (this permanently removes its local data):
-
-```bash
-docker compose down
-docker volume rm ai-investment-intelligence_postgres_data
-docker compose up --build -d postgres
-docker compose run --rm backend alembic upgrade head
-```
-
-Confirm the volume name with `docker volume ls` before removal.
 
 ## Non-Docker setup
 
-Create a PostgreSQL database and copy `backend/.env.example` to `backend/.env`, updating
-`DATABASE_URL`. Then:
+Install Python 3.12+, Node.js 22+, npm, and PostgreSQL 17. Create the local database and configure
+`backend/.env` from the example.
 
-```bash
+```powershell
 cd backend
 python -m venv .venv
-# Windows: .venv\Scripts\activate
-# macOS/Linux: source .venv/bin/activate
+.\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
+Copy-Item .env.example .env
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
 In a second terminal:
 
-```bash
+```powershell
 cd frontend
-cp .env.example .env.local
 npm install
+Copy-Item .env.example .env.local
 npm run dev
 ```
 
-## Quality and tests
+## Environment variables
 
-```bash
+Never commit `.env`, `.env.local`, API keys, database credentials, or other secret values.
+Example files contain placeholders only.
+
+| Area | Variables |
+|---|---|
+| Application | `APP_NAME`, `APP_VERSION`, `APP_ENV`, `DEBUG`, `API_V1_PREFIX` |
+| Backend server | `BACKEND_HOST`, `BACKEND_PORT`, `FRONTEND_ORIGIN` |
+| Database | `DATABASE_URL`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `SQL_ECHO` |
+| Logging | `LOG_LEVEL`, `LOG_JSON` |
+| Provider | `MARKET_DATA_PROVIDER`, `MARKET_DATA_API_KEY`, `MARKET_DATA_BASE_URL` |
+| Provider resilience | `MARKET_DATA_TIMEOUT_SECONDS`, `MARKET_DATA_MAX_RETRIES` |
+| Cache | `MARKET_DATA_CACHE_ENABLED`, `MARKET_DATA_SYMBOL_CACHE_TTL_SECONDS`, `MARKET_DATA_CANDLE_CACHE_TTL_SECONDS`, `MARKET_DATA_QUOTE_CACHE_TTL_SECONDS` |
+| Candle limits | `MARKET_DATA_DEFAULT_CANDLE_LIMIT`, `MARKET_DATA_MAX_CANDLE_LIMIT` |
+| Intelligence | `INTELLIGENCE_POLL_INTERVAL_SECONDS`, `INTELLIGENCE_LIVE_THRESHOLD_SECONDS`, `INTELLIGENCE_STALE_THRESHOLD_SECONDS`, `INTELLIGENCE_CANDLE_LOOKBACK` |
+| Frontend | `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_APP_ENV` |
+
+Only variables prefixed with `NEXT_PUBLIC_` are exposed to the browser. Never place a provider
+key in one of those variables.
+
+## API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/` | Backend process information |
+| GET | `/api/v1/health` | Application liveness and version |
+| GET | `/api/v1/ready` | Initialization and database readiness |
+| GET | `/api/v1/market-data/provider` | Provider capabilities and limitations |
+| GET | `/api/v1/market-data/health` | Provider configuration and connectivity |
+| GET | `/api/v1/symbols/search?q=Apple&limit=10` | Search stock symbols |
+| GET | `/api/v1/symbols/AAPL` | Normalized symbol details |
+| GET | `/api/v1/market-data/AAPL/quote` | Normalized quote |
+| GET | `/api/v1/market-data/AAPL/candles?interval=1day&limit=20` | Normalized candles |
+| GET | `/api/v1/intelligence/health` | Intelligence-service readiness |
+| GET | `/api/v1/intelligence/AAPL` | Daily Phase 3 intelligence snapshot |
+| GET | `/api/v1/assessments/health` | Assessment input readiness and scoring version |
+| GET | `/api/v1/assessments/AAPL?interval=1day` | Daily technical assessment |
+
+Errors use the standard envelope:
+
+```json
+{
+  "error": {
+    "code": "UNSUPPORTED_INTERVAL",
+    "message": "Interval 1h is not supported.",
+    "details": null,
+    "request_id": "example-request-id"
+  }
+}
+```
+
+## Technical-assessment example
+
+Request:
+
+```http
+GET /api/v1/assessments/AAPL?interval=1day
+```
+
+Illustrative response — these are example values, not live market data:
+
+```json
+{
+  "symbol": "AAPL",
+  "interval": "1day",
+  "time_horizon": "SWING_POSITION",
+  "assessment": "BULLISH",
+  "technical_score": 72,
+  "confidence_score": 86,
+  "risk": {
+    "score": 43,
+    "level": "ELEVATED",
+    "data_coverage_percentage": 100,
+    "components": []
+  },
+  "components": [
+    {
+      "name": "trend",
+      "weight": 20,
+      "available": true,
+      "raw_value": "UPTREND",
+      "signal": 0.6,
+      "weighted_contribution": 12,
+      "explanation": "The Phase 3 trend classification is UPTREND."
+    }
+  ],
+  "supporting_factors": [],
+  "conflicting_factors": [],
+  "risk_factors": [],
+  "missing_data_factors": [],
+  "data_quality": {
+    "freshness_state": "DELAYED",
+    "source_age_seconds": 60,
+    "quote_data_status": "DELAYED",
+    "quote_cached": false,
+    "market_status": "OPEN",
+    "available_directional_weight": 100,
+    "eligible_directional_weight": 100,
+    "input_coverage_percentage": 100,
+    "issues": []
+  },
+  "scoring_version": "technical-v1",
+  "snapshot_timestamp": "2026-07-25T12:00:00Z",
+  "generated_at": "2026-07-25T12:00:01Z"
+}
+```
+
+### Score interpretation
+
+- **Technical score** measures directional technical evidence from the available Phase 3 fields.
+- **Confidence score** measures coverage, freshness, and agreement. Missing or stale inputs reduce
+  confidence without inventing replacement values.
+- **Risk score** is calculated independently from volatility, freshness, level distances,
+  price-move magnitude, range extremes, and market status.
+
+Supported technical outlooks are:
+
+- `STRONGLY_BULLISH`
+- `BULLISH`
+- `NEUTRAL`
+- `BEARISH`
+- `STRONGLY_BEARISH`
+
+RSI overbought and oversold values express directional momentum together with extension risk;
+they are not automatic reversal conditions.
+
+## Testing and quality
+
+```powershell
 cd backend
-ruff format --check .
-ruff check .
-mypy app
-pytest
+python -m ruff format --check app tests
+python -m ruff check app tests --no-cache
+python -m mypy app
+python -m pytest -q -p no:cacheprovider
 
-cd ../frontend
+cd ..\frontend
 npm run format:check
 npm run lint
 npm run type-check
 npm test
 npm run build
+
+cd ..
+git diff --check
 ```
 
-Use `ruff format .` and `npm run format` to apply formatting. PowerShell users can also use
-`scripts/backend.ps1` and `scripts/frontend.ps1`.
+Verified status before publication:
 
-## Migrations
+- Backend: 41 tests passed
+- Ruff formatting and lint: passed
+- ESLint: passed
+- TypeScript: passed
+- Prettier: passed
+- `git diff --check`: passed
+- Frontend: 8 tests defined; execution was blocked by managed-environment process permissions
 
-```bash
-cd backend
-alembic upgrade head
-alembic current
-alembic downgrade -1
-alembic revision --autogenerate -m "describe change"
-```
+## Current limitations
 
-The initial reversible migration creates only `system_metadata` with UTC-aware timestamps.
+- Phase 4A supports daily assessments only.
+- No authentication, portfolios, watchlists, position sizing, or execution.
+- No machine learning, LLM, fundamental, news-sentiment, sector, or macro engine.
+- No Redis, Celery, WebSockets, or distributed cache.
+- Assessments are computed on request and are not stored in PostgreSQL.
+- Provider quotas and entitlements can limit freshness and intraday market-data access.
+- The in-process cache is local to each backend instance.
 
-## Endpoints
+## Future roadmap
 
-| Method | Path | Purpose |
-|---|---|---|
-| GET | `/` | Confirms the backend process is running |
-| GET | `/api/v1/health` | Application liveness and version |
-| GET | `/api/v1/ready` | Application initialization and database connectivity |
-
-Errors use `{ "error": { "code", "message", "details", "request_id" } }`. Requests may supply
-`X-Request-ID`; every response exposes it.
-
-## Troubleshooting
-
-- `ready` returns 503: verify PostgreSQL is healthy, credentials match, and migrations ran.
-- Browser shows backend unavailable: verify port 8000 and `NEXT_PUBLIC_API_BASE_URL`.
-- CORS failure: make `FRONTEND_ORIGIN` exactly match the browser origin.
-- Changed database credentials after first startup: reset the development volume or restore the
-  original values; PostgreSQL initialization variables apply only to a new volume.
-- PowerShell blocks `npm.ps1`: run `npm.cmd` or use Command Prompt.
-
-## Environment variables
-
-Backend: `APP_NAME`, `APP_VERSION`, `APP_ENV`, `DEBUG`, `API_V1_PREFIX`, `BACKEND_HOST`,
-`BACKEND_PORT`, `FRONTEND_ORIGIN`, `DATABASE_URL`, `LOG_LEVEL`, `LOG_JSON`, `SQL_ECHO`.
-
-Frontend (public): `NEXT_PUBLIC_API_BASE_URL`, `NEXT_PUBLIC_APP_ENV`.
-
-PostgreSQL/Compose: `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`.
-
-## Next phase
-
-The next planned phase may establish the first explicitly approved domain capability and its data
-contracts. No Phase 2 functionality is present in this repository.
-
+- Make Phase 3 snapshots explicitly interval-aware before considering intraday assessments.
+- Add separately designed fundamental, sentiment, sector, and macro intelligence modules.
+- Add authentication, portfolios, and watchlists with explicit security and persistence designs.
+- Consider shared caching and background processing when operational requirements justify them.
+- Expand observability, deployment automation, and production hardening.

@@ -15,6 +15,13 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.logging import configure_logging
+from app.modules.assessments.service import AssessmentService
+from app.modules.intelligence.polling import QuotePollingEngine
+from app.modules.intelligence.service import IntelligenceService
+from app.modules.market_data.cache import TTLCache
+from app.modules.market_data.factory import build_provider
+from app.modules.market_data.http_client import MarketDataHttpClient
+from app.modules.market_data.service import MarketDataService
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +47,28 @@ def create_app() -> FastAPI:
     configure_logging(settings.app_name, settings.app_env, settings.log_level, settings.log_json)
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        market_client = MarketDataHttpClient(
+            timeout_seconds=settings.market_data_timeout_seconds,
+            max_retries=settings.market_data_max_retries,
+        )
+        provider = build_provider(settings, market_client)
+        market_data_service = MarketDataService(
+            provider,
+            TTLCache(enabled=settings.market_data_cache_enabled),
+            settings,
+        )
+        polling = QuotePollingEngine(
+            market_data_service.quote, settings.intelligence_poll_interval_seconds
+        )
+        app.state.market_data_service = market_data_service
+        intelligence_service = IntelligenceService(market_data_service, polling, settings)
+        app.state.intelligence_service = intelligence_service
+        app.state.assessment_service = AssessmentService(intelligence_service)
         logger.info("Application initialized")
         yield
+        await polling.stop_all()
+        await market_client.close()
         logger.info("Application stopped")
 
     application = FastAPI(

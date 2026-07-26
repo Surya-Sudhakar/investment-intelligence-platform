@@ -1,23 +1,53 @@
-# Phase 1 architecture
+# Platform architecture
 
 ## Decision
 
-The backend is a modular monolith. Cross-cutting foundations live in `core`, `db`, `api`,
-and `schemas`; future business capabilities will be added as cohesive packages under
-`app/modules` only when their phase begins. This keeps transactions and deployments simple
-while preserving clear internal boundaries.
+The backend is a modular monolith. Cross-cutting foundations live in `core`, `db`, `api`, and
+`schemas`; market data, intelligence, and assessments are cohesive packages under
+`app/modules`. This keeps deployment simple while preserving clear internal boundaries.
 
 ```mermaid
 flowchart LR
-    Browser["Browser / Next.js App Router"] -->|"HTTP, typed client"| API["FastAPI /api/v1"]
+    Browser["Next.js frontend"] -->|"HTTP, typed client"| API["FastAPI /api/v1"]
     API --> MW["Request ID, CORS, logging, errors"]
-    MW --> Routes["Thin status routes"]
+    MW --> Routes["Thin API routes"]
+    Routes --> Assessment["AssessmentService"]
+    Assessment -->|"one snapshot call"| Intelligence["IntelligenceService"]
+    Intelligence --> MarketData["MarketDataService and TTL cache"]
+    MarketData --> Provider["Twelve Data or configured provider"]
     Routes --> Session["SQLAlchemy session dependency"]
     Session --> PostgreSQL[(PostgreSQL)]
     Config["Environment / Pydantic Settings"] --> API
-    Config --> Session
+    Config --> MarketData
     Alembic["Alembic migrations"] --> PostgreSQL
 ```
+
+## Module boundaries
+
+- `app/modules/market_data` owns provider adapters, provider-neutral schemas, validation,
+  resilience, and the in-process cache.
+- `app/modules/intelligence` consumes `MarketDataService` and produces the normalized daily
+  `IntelligenceSnapshot`.
+- `app/modules/assessments` consumes one snapshot through `IntelligenceService` and applies
+  deterministic `technical-v1` rules.
+- `app/api/v1/routes` performs HTTP validation and delegates to application services.
+
+Phase 4A has no import or runtime dependency on Twelve Data or Alpha Vantage adapters. Provider
+selection remains behind `MarketDataService`.
+
+## Assessment request flow
+
+```text
+Frontend
+  → GET /api/v1/assessments/{symbol}?interval=1day
+  → AssessmentService.assess()
+  → IntelligenceService.snapshot() exactly once
+  → MarketDataService and existing TTL cache
+  → Twelve Data or configured provider
+```
+
+`AssessmentService` does not persist its output. PostgreSQL remains responsible only for the
+existing application foundation; no assessment table or migration exists.
 
 ## Configuration flow
 
@@ -40,13 +70,18 @@ Alembic owns schema changes, starting with the reversible `system_metadata` tabl
 
 ## Deliberate exclusions
 
-Redis has no Phase 1 workload to serve. Microservices would add network, deployment, consistency,
-and observability costs before there are useful domain boundaries. Authentication, market data,
-analysis, recommendations, trades, portfolios, and their tables are explicitly deferred.
+Redis and distributed task processing have no current workload to serve. Microservices would add
+network, deployment, consistency, and observability costs without a current operational need.
+Authentication, order execution, portfolio persistence, ML, LLM, and non-technical intelligence
+engines are outside the implemented scope.
 
-## Future modules
+## Extension rule
 
-Each future capability should enter `app/modules/<capability>` with its own service and persistence
-boundary, expose only necessary interfaces, and register thin API routes. Cross-module calls
-should use application services rather than importing route handlers or ORM internals.
+Each future capability should enter `app/modules/<capability>` with its own service boundary,
+expose only necessary interfaces, and register thin API routes. Cross-module calls should use
+application services rather than importing route handlers or provider implementations.
 
+Phase 2 adds the first cohesive module at `app/modules/market_data`. See
+[`market-data.md`](market-data.md) for its provider-neutral contracts, request flow, validation,
+error mapping and caching decisions. See [`intelligence.md`](intelligence.md) and
+[`technical-assessments.md`](technical-assessments.md) for the Phase 3 and Phase 4A contracts.

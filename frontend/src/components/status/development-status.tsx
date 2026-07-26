@@ -24,7 +24,7 @@ export function DevelopmentStatus() {
   return (
     <main className="mx-auto max-w-4xl p-6 sm:p-10">
       <p className="text-sm font-semibold uppercase tracking-wide text-blue-700">
-        Phase 1
+        Phase 2
       </p>
       <h1 className="mt-2 text-3xl font-bold">
         AI Investment Intelligence Platform
