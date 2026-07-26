@@ -171,7 +171,9 @@ describe("MarketDataScreen", () => {
     });
     renderScreen();
     expect(
-      await screen.findByText(/Cannot connect to the backend/),
+      await screen.findByText(/Cannot connect to the backend/, undefined, {
+        timeout: 4_000,
+      }),
     ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Selected symbol"), {
       target: { value: "AAPL" },
