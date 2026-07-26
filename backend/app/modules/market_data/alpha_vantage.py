@@ -16,6 +16,17 @@ from app.core.exceptions import (
     ProviderRateLimitError,
     SymbolNotFoundError,
 )
+from app.modules.assets.schemas import (
+    AllocationItem,
+    AssetResolution,
+    AssetType,
+    EtfMetrics,
+    EtfProfile,
+    GoldMetrics,
+    ProviderAssetData,
+    StockMetrics,
+    StockProfile,
+)
 from app.modules.market_data.http_client import MarketDataHttpClient
 from app.modules.market_data.schemas import (
     Candle,
@@ -132,6 +143,148 @@ class AlphaVantageProvider:
             provider=self.name,
             provider_symbol=str(payload["Symbol"]).upper(),
             timezone=None,
+        )
+
+    @staticmethod
+    def _asset_decimal(value: object, *, percentage: bool = False) -> Decimal | None:
+        if value is None or str(value).strip().casefold() in {"", "none", "-"}:
+            return None
+        try:
+            parsed = Decimal(str(value).replace("%", "").replace(",", ""))
+            return parsed * 100 if percentage and "%" not in str(value) else parsed
+        except InvalidOperation:
+            return None
+
+    async def resolve_asset(self, symbol: str) -> AssetResolution:
+        canonical = symbol.replace("/", "").replace("-", "").upper()
+        if canonical == "XAUUSD":
+            return AssetResolution(
+                symbol="XAUUSD",
+                provider_symbol="XAU",
+                display_name="Gold Spot / US Dollar",
+                asset_type=AssetType.GOLD,
+                currency="USD",
+            )
+        payload = await self._request(function="OVERVIEW", symbol=symbol)
+        if not payload or not payload.get("Symbol"):
+            raise SymbolNotFoundError(symbol)
+        raw_type = str(payload.get("AssetType", "")).casefold()
+        asset_type = AssetType.ETF if "etf" in raw_type or "fund" in raw_type else AssetType.STOCK
+        if raw_type and not any(value in raw_type for value in ("stock", "equity", "etf", "fund")):
+            asset_type = AssetType.UNKNOWN
+        return AssetResolution(
+            symbol=str(payload["Symbol"]).upper(),
+            provider_symbol=str(payload["Symbol"]).upper(),
+            display_name=str(payload.get("Name") or symbol),
+            asset_type=asset_type,
+            exchange=str(payload.get("Exchange") or "") or None,
+            currency=str(payload.get("Currency") or "") or None,
+        )
+
+    async def get_asset_data(self, resolution: AssetResolution) -> ProviderAssetData:
+        if resolution.asset_type is AssetType.GOLD:
+            payload = await self._request(function="GOLD_SILVER_SPOT", symbol="XAU")
+            timestamp = payload.get("timestamp") or payload.get("last_updated")
+            parsed_timestamp = None
+            if timestamp:
+                try:
+                    parsed_timestamp = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+                except ValueError:
+                    parsed_timestamp = None
+            return ProviderAssetData(
+                resolution=resolution,
+                gold_metrics=GoldMetrics(
+                    current_price=self._asset_decimal(
+                        payload.get("price")
+                        or payload.get("spot_price")
+                        or payload.get("ask")
+                        or payload.get("bid")
+                    )
+                ),
+                source_timestamp=parsed_timestamp,
+                warnings=[]
+                if any(
+                    payload.get(key) is not None for key in ("price", "spot_price", "ask", "bid")
+                )
+                else ["The gold provider response did not include a normalized spot price."],
+            )
+        if resolution.asset_type is AssetType.ETF:
+            payload = await self._request(function="ETF_PROFILE", symbol=resolution.provider_symbol)
+            holdings = payload.get("holdings")
+            sectors = payload.get("sectors")
+            return ProviderAssetData(
+                resolution=resolution,
+                etf_profile=EtfProfile(
+                    fund_name=resolution.display_name,
+                    fund_provider=str(payload.get("provider") or "") or None,
+                    fund_category=str(payload.get("assetClass") or "") or None,
+                ),
+                etf_metrics=EtfMetrics(
+                    expense_ratio_percentage=self._asset_decimal(
+                        payload.get("net_expense_ratio"), percentage=True
+                    ),
+                    net_assets=self._asset_decimal(payload.get("net_assets")),
+                    holdings_count=len(holdings) if isinstance(holdings, list) else None,
+                    top_holdings=[
+                        AllocationItem(
+                            name=str(item.get("description") or item.get("symbol") or "Unknown"),
+                            weight_percentage=self._asset_decimal(
+                                item.get("weight"), percentage=True
+                            ),
+                        )
+                        for item in holdings[:10]
+                        if isinstance(item, dict)
+                    ]
+                    if isinstance(holdings, list)
+                    else None,
+                    sector_allocation=[
+                        AllocationItem(
+                            name=str(item.get("sector") or "Unknown"),
+                            weight_percentage=self._asset_decimal(
+                                item.get("weight"), percentage=True
+                            ),
+                        )
+                        for item in sectors
+                        if isinstance(item, dict)
+                    ]
+                    if isinstance(sectors, list)
+                    else None,
+                ),
+            )
+        payload = await self._request(function="OVERVIEW", symbol=resolution.provider_symbol)
+        return ProviderAssetData(
+            resolution=resolution,
+            stock_profile=StockProfile(
+                company_name=str(payload.get("Name") or resolution.display_name),
+                country=str(payload.get("Country") or "") or None,
+                sector=str(payload.get("Sector") or "") or None,
+                industry=str(payload.get("Industry") or "") or None,
+            ),
+            stock_metrics=StockMetrics(
+                market_capitalization=self._asset_decimal(payload.get("MarketCapitalization")),
+                pe_ratio=self._asset_decimal(payload.get("PERatio")),
+                forward_pe_ratio=self._asset_decimal(payload.get("ForwardPE")),
+                eps=self._asset_decimal(payload.get("EPS")),
+                revenue=self._asset_decimal(payload.get("RevenueTTM")),
+                revenue_growth_percentage=self._asset_decimal(
+                    payload.get("QuarterlyRevenueGrowthYOY"), percentage=True
+                ),
+                profit_margin_percentage=self._asset_decimal(
+                    payload.get("ProfitMargin"), percentage=True
+                ),
+                operating_margin_percentage=self._asset_decimal(
+                    payload.get("OperatingMarginTTM"), percentage=True
+                ),
+                dividend_yield_percentage=self._asset_decimal(
+                    payload.get("DividendYield"), percentage=True
+                ),
+                high_52_week=self._asset_decimal(payload.get("52WeekHigh")),
+                low_52_week=self._asset_decimal(payload.get("52WeekLow")),
+            ),
+            warnings=[
+                "Debt, cash, net income, and average volume are unavailable from this "
+                "provider response."
+            ],
         )
 
     @staticmethod

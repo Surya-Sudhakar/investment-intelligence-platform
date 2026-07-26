@@ -2,6 +2,7 @@ import logging
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import cast
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response
@@ -16,6 +17,8 @@ from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.logging import configure_logging
 from app.modules.assessments.service import AssessmentService
+from app.modules.assets.provider import AssetDataProvider
+from app.modules.assets.service import AssetIntelligenceService
 from app.modules.intelligence.polling import QuotePollingEngine
 from app.modules.intelligence.service import IntelligenceService
 from app.modules.market_data.cache import TTLCache
@@ -65,6 +68,13 @@ def create_app() -> FastAPI:
         intelligence_service = IntelligenceService(market_data_service, polling, settings)
         app.state.intelligence_service = intelligence_service
         app.state.assessment_service = AssessmentService(intelligence_service)
+        app.state.asset_intelligence_service = AssetIntelligenceService(
+            cast(AssetDataProvider, provider),
+            market_data_service,
+            intelligence_service,
+            market_data_service.cache,
+            settings,
+        )
         logger.info("Application initialized")
         yield
         await polling.stop_all()
