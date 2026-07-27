@@ -50,6 +50,13 @@ class AssetIntelligenceService:
         await self.cache.set(key, resolution, self.settings.asset_classification_cache_ttl_seconds)
         return resolution
 
+    async def resolve_asset(self, symbol: str) -> AssetResolution:
+        canonical = self.normalize_symbol(symbol)
+        resolution = await self._resolve(canonical)
+        if resolution.asset_type is AssetType.UNKNOWN:
+            raise UnsupportedAssetError(canonical)
+        return resolution
+
     async def _provider_data(self, resolution: AssetResolution) -> ProviderAssetData:
         key = f"asset:data:{self.provider.name}:{resolution.symbol}"
         cached = await self.cache.get(key)
@@ -65,10 +72,7 @@ class AssetIntelligenceService:
         return data
 
     async def get_intelligence(self, symbol: str) -> AssetIntelligenceResponse:
-        canonical = self.normalize_symbol(symbol)
-        resolution = await self._resolve(canonical)
-        if resolution.asset_type is AssetType.UNKNOWN:
-            raise UnsupportedAssetError(canonical)
+        resolution = await self.resolve_asset(symbol)
         data = await self._provider_data(resolution)
         generated_at = datetime.now(UTC)
         warnings = list(data.warnings)

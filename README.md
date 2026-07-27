@@ -12,7 +12,7 @@ recommendations.
 
 ## Current development status
 
-Phases 1, 2, 3, 4A, and 5 are implemented. The application supports provider-neutral stock,
+Phases 1, 2, 3, 4A, 5, and 6 are implemented. The application supports provider-neutral stock,
 gold, and ETF asset intelligence. Twelve Data is the configured default provider, while Alpha
 Vantage remains available as an alternative adapter.
 
@@ -211,6 +211,7 @@ key in one of those variables.
 | GET | `/api/v1/assessments/health` | Assessment input readiness and scoring version |
 | GET | `/api/v1/assessments/AAPL?interval=1day` | Daily technical assessment |
 | GET | `/api/v1/assets/AAPL/intelligence` | Stock, gold, or ETF asset intelligence |
+| GET | `/api/v1/assets/AAPL/news?limit=20` | News intelligence and sentiment |
 
 Errors use the standard envelope:
 
@@ -331,6 +332,11 @@ Verified status before publication:
 - Frontend: 8 tests defined; execution was blocked by managed-environment process permissions
 
 ## Current limitations
+
+- Phase 7 Market Context uses deterministic 20-session daily comparisons for stocks, gold,
+  and ETFs. Unsupported data is represented with structured availability metadata.
+- Phase 7 does not calculate interest-rate, inflation, central-bank, currency, bond,
+  geopolitical, or other macroeconomic context; those inputs are reserved for Phase 8.
 
 - Phase 4A supports daily assessments only.
 - No authentication, portfolios, watchlists, position sizing, or execution.

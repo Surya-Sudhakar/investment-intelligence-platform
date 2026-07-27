@@ -89,3 +89,13 @@ Phase 5 adds `app/modules/assets`. `AssetIntelligenceService` depends on the sep
 `AssetDataProvider` protocol and reuses the configured adapter, `TTLCache`, `MarketDataService`,
 and `IntelligenceService`. It has no dependency on `AssessmentService`, and Phase 4A scoring
 does not consume Phase 5 fundamentals.
+
+Phase 7 adds `app/modules/market_context`. `MarketContextService` depends on the existing asset
+and market-data services plus a dedicated `MarketContextProvider` reference contract. It loads
+all price observations through `MarketDataService`, reuses the shared `TTLCache`, and applies
+versioned deterministic rules. It does not import Phase 6 news or implement Phase 8 macro data.
+See [`market-context.md`](market-context.md).
+
+Cross-module metadata conventions for new intelligence modules are documented in
+[`intelligence-metadata-conventions.md`](intelligence-metadata-conventions.md). Existing Phase 3
+through Phase 7 contracts remain backward compatible.

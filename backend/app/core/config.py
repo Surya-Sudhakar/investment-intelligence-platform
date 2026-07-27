@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     asset_classification_cache_ttl_seconds: int = 86400
     asset_profile_cache_ttl_seconds: int = 86400
     asset_fundamentals_cache_ttl_seconds: int = 21600
+    market_context_cache_ttl_seconds: int = 300
+    market_context_partial_cache_ttl_seconds: int = 60
+    news_provider: Literal["alpha_vantage"] = "alpha_vantage"
+    news_api_key: str | None = None
+    news_base_url: str = "https://www.alphavantage.co/query"
+    news_timeout_seconds: float = 10.0
+    news_max_retries: int = 2
+    news_cache_ttl_seconds: int = 900
+    news_empty_cache_ttl_seconds: int = 300
+    news_fresh_hours: int = 6
+    news_recent_hours: int = 24
     market_data_default_candle_limit: int = 100
     market_data_max_candle_limit: int = 500
     intelligence_poll_interval_seconds: float = 30.0
@@ -71,6 +82,20 @@ class Settings(BaseSettings):
             <= 0
         ):
             raise ValueError("Asset cache TTL values must be positive")
+        if (
+            min(
+                self.market_context_cache_ttl_seconds,
+                self.market_context_partial_cache_ttl_seconds,
+            )
+            <= 0
+        ):
+            raise ValueError("Market-context cache TTL values must be positive")
+        if self.news_max_retries > 5:
+            raise ValueError("NEWS_MAX_RETRIES must be at most 5")
+        if min(self.news_cache_ttl_seconds, self.news_empty_cache_ttl_seconds) <= 0:
+            raise ValueError("News cache TTL values must be positive")
+        if self.news_fresh_hours >= self.news_recent_hours:
+            raise ValueError("News fresh hours must be lower than recent hours")
         return self
 
 

@@ -21,10 +21,14 @@ from app.modules.assets.provider import AssetDataProvider
 from app.modules.assets.service import AssetIntelligenceService
 from app.modules.intelligence.polling import QuotePollingEngine
 from app.modules.intelligence.service import IntelligenceService
+from app.modules.market_context.references import ConfiguredContextProvider
+from app.modules.market_context.service import MarketContextService
 from app.modules.market_data.cache import TTLCache
 from app.modules.market_data.factory import build_provider
 from app.modules.market_data.http_client import MarketDataHttpClient
 from app.modules.market_data.service import MarketDataService
+from app.modules.news.factory import build_news_provider
+from app.modules.news.service import NewsIntelligenceService
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +79,32 @@ def create_app() -> FastAPI:
             market_data_service.cache,
             settings,
         )
+        app.state.market_context_service = MarketContextService(
+            app.state.asset_intelligence_service,
+            market_data_service,
+            ConfiguredContextProvider(),
+            market_data_service.cache,
+            settings.market_context_cache_ttl_seconds,
+            settings.market_context_partial_cache_ttl_seconds,
+        )
+        news_client = MarketDataHttpClient(
+            timeout_seconds=settings.news_timeout_seconds,
+            max_retries=settings.news_max_retries,
+        )
+        app.state.news_service = NewsIntelligenceService(
+            build_news_provider(settings, news_client),
+            app.state.asset_intelligence_service,
+            market_data_service.cache,
+            settings.news_cache_ttl_seconds,
+            settings.news_empty_cache_ttl_seconds,
+            settings.news_fresh_hours,
+            settings.news_recent_hours,
+        )
         logger.info("Application initialized")
         yield
         await polling.stop_all()
         await market_client.close()
+        await news_client.close()
         logger.info("Application stopped")
 
     application = FastAPI(

@@ -88,3 +88,12 @@ class ProviderConfigurationError(MarketDataError):
             "Market-data provider configuration is incomplete.",
             503,
         )
+
+
+class NewsProviderConfigurationError(MarketDataError):
+    def __init__(self) -> None:
+        super().__init__(
+            "NEWS_PROVIDER_CONFIGURATION_ERROR",
+            "News provider configuration is incomplete.",
+            503,
+        )

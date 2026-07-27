@@ -19,6 +19,8 @@ Known errors use the standard `error` envelope and include a request ID.
 | GET | `/api/v1/assessments/health` | `AssessmentHealth` |
 | GET | `/api/v1/assessments/{symbol}?interval=1day` | `TechnicalAssessment` |
 | GET | `/api/v1/assets/{symbol}/intelligence` | `AssetIntelligenceResponse` |
+| GET | `/api/v1/assets/{symbol}/news?limit=20` | `AssetNewsIntelligence` |
+| GET | `/api/v1/assets/{symbol}/market-context` | `MarketContextResponse` |
 
 ## Daily technical assessment
 
@@ -61,3 +63,20 @@ common Phase 5 envelope with asset-specific `profile`, `metrics`, optional stock
 
 Partial and stale results use HTTP 200 with explicit warnings. Unknown provider instrument
 types return the standardized `UNSUPPORTED_ASSET` response.
+
+## Market context
+
+`GET /api/v1/assets/{symbol}/market-context` returns deterministic daily market context for
+stocks, gold, and ETFs. Optional data uses structured `available`, `unavailable`,
+`not_applicable`, or `planned_phase8` metadata with a reason. See
+[`market-context.md`](market-context.md) for the schema, weights, thresholds, caching, provider
+support, examples, and limitations.
+
+Comparative fields include optional `alignment` metadata with the actual common-observation
+count, aligned UTC start and end dates, requested lookback, minimum required overlap, and an
+alignment-sufficiency flag. Insufficient overlap produces a structured unavailable field rather
+than a relative-strength value. `partial_data_status` is `complete`, `partial`, or `unavailable`.
+
+The canonical metadata vocabulary for future independent intelligence modules, plus migration
+guidance for the existing Phase 3 through Phase 7 contracts, is documented in
+[`intelligence-metadata-conventions.md`](intelligence-metadata-conventions.md).

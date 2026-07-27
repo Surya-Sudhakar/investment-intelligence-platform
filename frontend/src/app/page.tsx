@@ -3,6 +3,8 @@ import { AssetIntelligenceDashboard } from "@/components/assets/asset-intelligen
 import { DevelopmentStatus } from "@/components/status/development-status";
 import { MarketDataScreen } from "@/components/market-data/market-data-screen";
 import { IntelligenceDashboard } from "@/components/intelligence/intelligence-dashboard";
+import { NewsIntelligenceDashboard } from "@/components/news/news-intelligence-dashboard";
+import { MarketContextDashboard } from "@/components/market-context/market-context-dashboard";
 
 export default function Home() {
   return (
@@ -13,6 +15,8 @@ export default function Home() {
         <IntelligenceDashboard />
         <AssessmentDashboard />
         <AssetIntelligenceDashboard />
+        <NewsIntelligenceDashboard />
+        <MarketContextDashboard />
       </main>
     </>
   );
