@@ -12,9 +12,11 @@ recommendations.
 
 ## Current development status
 
-Phases 1, 2, 3, 4A, 5, and 6 are implemented. The application supports provider-neutral stock,
-gold, and ETF asset intelligence. Twelve Data is the configured default provider, while Alpha
-Vantage remains available as an alternative adapter.
+Phases 1, 2, 3, 4A, 5, 6, and 7 are implemented. The application supports provider-neutral
+stock, gold, and ETF intelligence; deterministic technical assessments; grounded news
+intelligence; and surrounding-market context. Twelve Data is the configured default market-data
+provider, while Alpha Vantage remains available as an alternative market-data adapter and as the
+Phase 6 news provider.
 
 ### Phase 1 — Foundation
 
@@ -69,6 +71,28 @@ Vantage remains available as an alternative adapter.
 
 Phase 5 does not combine fundamentals with the Phase 4A technical score. See
 [docs/asset-intelligence.md](docs/asset-intelligence.md).
+
+### Phase 6 — News Intelligence
+
+- Provider-neutral news-provider contract with an Alpha Vantage adapter
+- Asset-scoped article retrieval, validation, grouping, and bounded caching
+- Deterministic sentiment classification and confidence metadata
+- Grounded summaries derived from returned article data
+- Freshness, warnings, partial-data handling, and frontend dashboard
+
+See [docs/news-intelligence.md](docs/news-intelligence.md).
+
+### Phase 7 — Market Context
+
+- Provider-neutral context for stocks, gold, and ETFs
+- Deterministic `market-context-v1` classifications and confidence
+- Market, sector, industry, commodity, benchmark, and relative-strength observations
+- Shared-date alignment for every comparative return calculation
+- Structured availability, freshness, warnings, proxy labels, and partial-data status
+- Frontend Market Context dashboard
+
+Phase 7 does not include macroeconomic analysis. See
+[docs/market-context.md](docs/market-context.md).
 
 The public assessment endpoint supports only `interval=1day`. `AssessmentService` calls
 `IntelligenceService.snapshot()` once per request. It has no direct provider dependency and does
@@ -212,6 +236,7 @@ key in one of those variables.
 | GET | `/api/v1/assessments/AAPL?interval=1day` | Daily technical assessment |
 | GET | `/api/v1/assets/AAPL/intelligence` | Stock, gold, or ETF asset intelligence |
 | GET | `/api/v1/assets/AAPL/news?limit=20` | News intelligence and sentiment |
+| GET | `/api/v1/assets/AAPL/market-context` | Stock, gold, or ETF surrounding-market context |
 
 Errors use the standard envelope:
 
@@ -321,15 +346,15 @@ cd ..
 git diff --check
 ```
 
-Verified status before publication:
+Verified status for the Phase 6/7 baseline:
 
-- Backend: 41 tests passed
-- Ruff formatting and lint: passed
-- ESLint: passed
-- TypeScript: passed
-- Prettier: passed
+- Backend: 78 tests passed
+- Frontend: 18 tests passed
+- Alembic upgrade, downgrade, and clean re-upgrade: passed
+- Production frontend build: passed
+- Ruff formatting, Ruff lint, strict MyPy, ESLint, TypeScript, and Prettier: passed
 - `git diff --check`: passed
-- Frontend: 8 tests defined; execution was blocked by managed-environment process permissions
+- GitHub Actions CI run `#20`: passed
 
 ## Current limitations
 
@@ -340,7 +365,9 @@ Verified status before publication:
 
 - Phase 4A supports daily assessments only.
 - No authentication, portfolios, watchlists, position sizing, or execution.
-- No machine learning, LLM, fundamental, news-sentiment, sector, or macro engine.
+- No machine learning, LLM-generated reasoning, prediction engine, or macro-intelligence engine.
+- Phase 5 fundamentals, Phase 6 news sentiment, and Phase 7 market context remain independent;
+  they are not combined into an investment recommendation.
 - No Redis, Celery, WebSockets, or distributed cache.
 - Assessments are computed on request and are not stored in PostgreSQL.
 - Provider quotas and entitlements can limit freshness and intraday market-data access.
@@ -349,7 +376,8 @@ Verified status before publication:
 ## Future roadmap
 
 - Make Phase 3 snapshots explicitly interval-aware before considering intraday assessments.
-- Add separately designed fundamental, sentiment, sector, and macro intelligence modules.
+- Add Phase 8 macro intelligence as a separately reviewed module.
+- Expand Phase 5–7 provider coverage without changing their provider-neutral contracts.
 - Add authentication, portfolios, and watchlists with explicit security and persistence designs.
 - Consider shared caching and background processing when operational requirements justify them.
 - Expand observability, deployment automation, and production hardening.
