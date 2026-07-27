@@ -117,7 +117,7 @@ describe("prototype-backed UI workspaces", () => {
   it("renders normalized Phase 2–7 workspace evidence", () => {
     render(<AssetWorkspace symbol="AAPL" />);
     expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
-    expect(screen.getByText("BULLISH")).toBeInTheDocument();
+    expect(screen.getAllByText("BULLISH")).toHaveLength(2);
     expect(screen.getByText("Coverage is constructive.")).toBeInTheDocument();
     expect(screen.getByText("STRONG")).toBeInTheDocument();
   });
