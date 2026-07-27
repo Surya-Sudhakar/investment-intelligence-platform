@@ -36,6 +36,7 @@ from app.modules.market_data.schemas import (
 )
 
 logger = logging.getLogger(__name__)
+US_EXCHANGES = {"NASDAQ", "NYSE", "NYSE ARCA", "NYSEARCA", "AMEX"}
 
 
 class TwelveDataProvider:
@@ -50,6 +51,24 @@ class TwelveDataProvider:
         if not self.api_key:
             raise ProviderConfigurationError()
         return {**values, "apikey": self.api_key}
+
+    @staticmethod
+    def provider_symbol(symbol: str) -> str:
+        canonical = symbol.replace("/", "").replace("-", "").upper()
+        return "XAU/USD" if canonical == "XAUUSD" else symbol
+
+    @staticmethod
+    def _listing_rank(item: dict[str, Any], query: str) -> tuple[int, int, int, str]:
+        symbol = str(item.get("symbol", "")).strip().upper()
+        exchange = str(item.get("exchange", "")).strip().upper()
+        country = str(item.get("country", "")).strip().casefold()
+        currency = str(item.get("currency", "")).strip().upper()
+        return (
+            -int(symbol == query.strip().upper()),
+            -int(exchange in US_EXCHANGES),
+            -int(country in {"united states", "usa", "us"} or currency == "USD"),
+            exchange,
+        )
 
     async def _request(self, endpoint: str, **params: str) -> dict[str, Any]:
         payload = await self.client.get_json(f"{self.base_url}/{endpoint}", self._params(**params))
@@ -97,7 +116,9 @@ class TwelveDataProvider:
         )
 
     async def search_symbols(self, query: str, limit: int) -> list[SymbolSearchResult]:
-        payload = await self._request("symbol_search", symbol=query, outputsize=str(limit))
+        payload = await self._request(
+            "symbol_search", symbol=query, outputsize=str(max(50, limit * 5))
+        )
         data = payload.get("data")
         if not isinstance(data, list):
             raise ProviderInvalidResponseError()
@@ -121,14 +142,27 @@ class TwelveDataProvider:
                         provider_symbol=symbol,
                     )
                 )
-        return results[:limit]
+        return sorted(
+            results,
+            key=lambda result: (
+                -int(result.symbol == query.strip().upper()),
+                -int((result.exchange or "").upper() in US_EXCHANGES),
+                -int(
+                    (result.country or "").casefold() in {"united states", "usa", "us"}
+                    or result.currency == "USD"
+                ),
+                result.symbol,
+                result.exchange or "",
+            ),
+        )[:limit]
 
     async def get_symbol_details(self, symbol: str) -> SymbolDetails:
         payload = await self._request("stocks", symbol=symbol)
         data = payload.get("data")
         if not isinstance(data, list) or not data or not isinstance(data[0], dict):
             raise SymbolNotFoundError(symbol)
-        item = data[0]
+        candidates = [item for item in data if isinstance(item, dict)]
+        item = sorted(candidates, key=lambda value: self._listing_rank(value, symbol))[0]
         provider_symbol = str(item.get("symbol", symbol)).upper()
         return SymbolDetails(
             symbol=provider_symbol,
@@ -155,9 +189,12 @@ class TwelveDataProvider:
         data = payload.get("data")
         if not isinstance(data, list):
             raise ProviderInvalidResponseError()
-        for item in data:
-            if not isinstance(item, dict) or str(item.get("symbol", "")).upper() != symbol:
-                continue
+        matches = [
+            item
+            for item in data
+            if isinstance(item, dict) and str(item.get("symbol", "")).upper() == symbol
+        ]
+        for item in sorted(matches, key=lambda value: self._listing_rank(value, symbol)):
             raw_type = str(item.get("instrument_type", "")).casefold()
             if "etf" in raw_type or "fund" in raw_type:
                 asset_type = AssetType.ETF
@@ -189,7 +226,24 @@ class TwelveDataProvider:
             )
         payload = await self._request("stocks", symbol=resolution.provider_symbol)
         data = payload.get("data")
-        item = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else {}
+        candidates = (
+            [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+        )
+        exact_exchange = [
+            item
+            for item in candidates
+            if str(item.get("symbol", "")).upper() == resolution.provider_symbol
+            and (
+                not resolution.exchange
+                or str(item.get("exchange", "")).upper() == resolution.exchange.upper()
+            )
+        ]
+        ranked = exact_exchange or candidates
+        item = (
+            sorted(ranked, key=lambda value: self._listing_rank(value, resolution.symbol))[0]
+            if ranked
+            else {}
+        )
         return ProviderAssetData(
             resolution=resolution,
             stock_profile=StockProfile(

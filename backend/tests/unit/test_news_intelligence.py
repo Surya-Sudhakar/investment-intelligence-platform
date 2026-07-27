@@ -90,6 +90,23 @@ def test_empty_news_is_safe() -> None:
     assert result.warnings
 
 
+def test_low_relevance_articles_are_excluded_from_output() -> None:
+    article = raw("Unrelated fund profile")
+    article.relevance_score = 10
+    service = NewsIntelligenceService(
+        Provider([article]),
+        Assets(),
+        TTLCache(),
+        900,
+        300,
+        6,
+        24,  # type: ignore[arg-type]
+    )
+    result = asyncio.run(service.get_news("AAPL", 20))
+    assert result.articles == []
+    assert result.aggregate.overall_sentiment.value == "UNKNOWN"
+
+
 def test_grouping_combines_duplicate_titles() -> None:
     base = raw("Apple announces product", id="a")
     sentiment, confidence, factors = classify_sentiment(base)

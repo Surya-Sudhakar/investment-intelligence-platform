@@ -63,6 +63,10 @@ class AlphaVantageProvider:
         return {**values, "apikey": self.api_key}
 
     @staticmethod
+    def provider_symbol(symbol: str) -> str:
+        return symbol
+
+    @staticmethod
     def _check_provider_error(payload: dict[str, Any]) -> None:
         if "Note" in payload:
             raise ProviderRateLimitError()

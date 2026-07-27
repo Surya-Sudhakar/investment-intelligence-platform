@@ -1,3 +1,4 @@
+import asyncio
 import re
 from datetime import UTC, datetime
 
@@ -30,16 +31,23 @@ class MarketDataService:
         self.provider = provider
         self.cache = cache
         self.settings = settings
+        self._request_locks: dict[str, asyncio.Lock] = {}
 
     @staticmethod
     def normalize_symbol(symbol: str) -> str:
         normalized = symbol.strip().upper()
         if not SYMBOL_PATTERN.fullmatch(normalized):
             raise InvalidSymbolError()
+        if normalized.replace("/", "").replace("-", "") == "XAUUSD":
+            return "XAUUSD"
         return normalized
 
     def capabilities(self) -> ProviderCapabilities:
         return self.provider.capabilities()
+
+    def _provider_symbol(self, symbol: str) -> str:
+        translator = getattr(self.provider, "provider_symbol", None)
+        return translator(symbol) if callable(translator) else symbol
 
     async def health(self) -> ProviderHealth:
         return await self.provider.health_check()
@@ -51,8 +59,11 @@ class MarketDataService:
         if isinstance(cached, list):
             return cached
         results = await self.provider.search_symbols(normalized, limit)
-        unique = {item.symbol: item for item in results if item.asset_type == "stock"}
-        output = [unique[symbol] for symbol in sorted(unique)][:limit]
+        unique: dict[str, SymbolSearchResult] = {}
+        for item in results:
+            if item.asset_type == "stock":
+                unique.setdefault(item.symbol, item)
+        output = list(unique.values())[:limit]
         await self.cache.set(key, output, self.settings.market_data_symbol_cache_ttl_seconds)
         return output
 
@@ -86,25 +97,36 @@ class MarketDataService:
             for candle in copied.data.candles:
                 candle.data_status = DataStatus.CACHED
             return copied
-        batch = await self.provider.get_candles(normalized, interval, start, end, limit)
-        status = batch.candles[0].data_status if batch.candles else DataStatus.UNKNOWN
-        response = CandleResponse(
-            data=CandleResponseData(
-                symbol=normalized,
-                interval=interval,
-                candles=batch.candles,
-                provider=self.provider.name,
-                count=len(batch.candles),
-                received_count=batch.received_count,
-                rejected_count=batch.rejected_count,
-                requested_at=datetime.now(UTC),
-                source_timezone=batch.source_timezone,
-                data_status=status,
-                cached=False,
+        async with self._request_locks.setdefault(key, asyncio.Lock()):
+            cached = await self.cache.get(key)
+            if isinstance(cached, CandleResponse):
+                copied = cached.model_copy(deep=True)
+                copied.data.cached = True
+                copied.data.data_status = DataStatus.CACHED
+                for candle in copied.data.candles:
+                    candle.data_status = DataStatus.CACHED
+                return copied
+            batch = await self.provider.get_candles(
+                self._provider_symbol(normalized), interval, start, end, limit
             )
-        )
-        await self.cache.set(key, response, self.settings.market_data_candle_cache_ttl_seconds)
-        return response
+            status = batch.candles[0].data_status if batch.candles else DataStatus.UNKNOWN
+            response = CandleResponse(
+                data=CandleResponseData(
+                    symbol=normalized,
+                    interval=interval,
+                    candles=batch.candles,
+                    provider=self.provider.name,
+                    count=len(batch.candles),
+                    received_count=batch.received_count,
+                    rejected_count=batch.rejected_count,
+                    requested_at=datetime.now(UTC),
+                    source_timezone=batch.source_timezone,
+                    data_status=status,
+                    cached=False,
+                )
+            )
+            await self.cache.set(key, response, self.settings.market_data_candle_cache_ttl_seconds)
+            return response
 
     async def quote(self, symbol: str) -> Quote:
         normalized = self.normalize_symbol(symbol)
@@ -115,6 +137,14 @@ class MarketDataService:
             copied.cached = True
             copied.data_status = DataStatus.CACHED
             return copied
-        quote = await self.provider.get_quote(normalized)
-        await self.cache.set(key, quote, self.settings.market_data_quote_cache_ttl_seconds)
-        return quote
+        async with self._request_locks.setdefault(key, asyncio.Lock()):
+            cached = await self.cache.get(key)
+            if isinstance(cached, Quote):
+                copied = cached.model_copy(deep=True)
+                copied.cached = True
+                copied.data_status = DataStatus.CACHED
+                return copied
+            quote = await self.provider.get_quote(self._provider_symbol(normalized))
+            quote.symbol = normalized
+            await self.cache.set(key, quote, self.settings.market_data_quote_cache_ttl_seconds)
+            return quote

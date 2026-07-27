@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from app.modules.assets.service import AssetIntelligenceService
 from app.modules.market_data.cache import TTLCache
+from app.modules.news.config import NEWS_V1
 from app.modules.news.grouping import group_articles
 from app.modules.news.provider import NewsProvider
 from app.modules.news.schemas import (
@@ -62,6 +63,8 @@ class NewsIntelligenceService:
             seen_ids.add(item.id)
             seen_urls.add(normalized_url)
             relevance = item.relevance_score or 50
+            if relevance < NEWS_V1.minimum_relevance:
+                continue
             sentiment, confidence, factors = classify_sentiment(item)
             text = f"{item.title} {item.summary}"
             article = NewsArticle(

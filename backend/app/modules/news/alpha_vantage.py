@@ -83,6 +83,16 @@ class AlphaVantageNewsProvider:
                         relevance = round(float(score["relevance_score"]) * 100)
                     except (KeyError, TypeError, ValueError):
                         pass
+        if resolution.asset_type is AssetType.STOCK:
+            company_tokens = {
+                token
+                for token in (resolution.display_name or "").casefold().replace(",", " ").split()
+                if len(token) >= 4 and token not in {"corporation", "company", "inc.", "limited"}
+            }
+            symbol_mentioned = resolution.symbol.casefold() in text
+            company_mentioned = any(token in text for token in company_tokens)
+            if not symbol_mentioned and not company_mentioned:
+                return None
         return ProviderNewsArticle(
             id=str(item.get("id") or url),
             title=title,

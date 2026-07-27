@@ -104,3 +104,58 @@ def test_search_and_details_are_normalized() -> None:
         await provider.client.close()
 
     asyncio.run(scenario())
+
+
+def test_exact_us_listing_is_preferred_for_duplicate_symbols() -> None:
+    async def scenario() -> None:
+        provider = provider_for(
+            {
+                "symbol_search": {
+                    "data": [
+                        {
+                            "symbol": "NVDA",
+                            "instrument_name": "NVIDIA Corporation",
+                            "instrument_type": "Common Stock",
+                            "exchange": "SIX",
+                            "currency": "CHF",
+                            "country": "Switzerland",
+                        },
+                        {
+                            "symbol": "NVDA",
+                            "instrument_name": "NVIDIA Corporation",
+                            "instrument_type": "Common Stock",
+                            "exchange": "NASDAQ",
+                            "currency": "USD",
+                            "country": "United States",
+                        },
+                    ]
+                },
+                "stocks": {
+                    "data": [
+                        {
+                            "symbol": "AAPL",
+                            "name": "Apple Inc",
+                            "exchange": "VSE",
+                            "currency": "EUR",
+                            "country": "Austria",
+                        },
+                        {
+                            "symbol": "AAPL",
+                            "name": "Apple Inc",
+                            "exchange": "NASDAQ",
+                            "currency": "USD",
+                            "country": "United States",
+                        },
+                    ]
+                },
+            }
+        )
+        results = await provider.search_symbols("NVDA", 10)
+        details = await provider.get_symbol_details("AAPL")
+        assert results[0].exchange == "NASDAQ"
+        assert details.exchange == "NASDAQ"
+        assert details.country == "United States"
+        assert provider.provider_symbol("XAUUSD") == "XAU/USD"
+        await provider.client.close()
+
+    asyncio.run(scenario())
